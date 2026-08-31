@@ -18,6 +18,26 @@
 #include "../cam_flash_pm6125_gpio/pm6125_flash_gpio.h"
 #endif
 
+/* Torch brightness override: -1 = HAL default, 0-127 = user override */
+extern int cam_torch_brightness_level;
+
+static inline void cam_flash_override_torch_brightness(
+	struct i2c_settings_list *i2c_list)
+{
+	struct cam_sensor_i2c_reg_array *regs;
+	uint32_t size, k;
+	if (cam_torch_brightness_level < 0 || !i2c_list)
+		return;
+	regs = i2c_list->i2c_settings.reg_setting;
+	size = i2c_list->i2c_settings.size;
+	for (k = 0; k < size; k++) {
+		/* AW36518/AW36514: 0x05 = LED1 torch, 0x06 = LED2 torch */
+		if (regs[k].reg_addr == 0x05 || regs[k].reg_addr == 0x06) {
+			regs[k].reg_data = (uint16_t)(cam_torch_brightness_level & 0x7F);
+		}
+	}
+}
+
 static uint default_on_timer = 2;
 module_param(default_on_timer, uint, 0644);
 
@@ -362,6 +382,7 @@ int cam_flash_i2c_flush_request(struct cam_flash_ctrl *fctrl,
 			if (i2c_set->is_settings_valid == 1) {
 				list_for_each_entry(i2c_list,
 					&(i2c_set->list_head), list) {
+				cam_flash_override_torch_brightness(i2c_list);
 					rc = cam_sensor_util_i2c_apply_setting(
 						&(fctrl->io_master_info),
 						i2c_list);
@@ -827,6 +848,7 @@ int cam_flash_i2c_apply_setting(struct cam_flash_ctrl *fctrl,
 			list_for_each_entry(i2c_list,
 				&(i2c_set->list_head),
 				list) {
+				cam_flash_override_torch_brightness(i2c_list);
 				rc = cam_sensor_util_i2c_apply_setting
 					(&(fctrl->io_master_info), i2c_list);
 				if (rc) {
@@ -843,6 +865,7 @@ int cam_flash_i2c_apply_setting(struct cam_flash_ctrl *fctrl,
 			list_for_each_entry(i2c_list,
 				&(fctrl->i2c_data.init_settings.list_head),
 				list) {
+				cam_flash_override_torch_brightness(i2c_list);
 				rc = cam_sensor_util_i2c_apply_setting
 					(&(fctrl->io_master_info), i2c_list);
 				if ((rc == -EAGAIN) &&
@@ -851,6 +874,7 @@ int cam_flash_i2c_apply_setting(struct cam_flash_ctrl *fctrl,
 					CAM_WARN(CAM_FLASH,
 						"CCI HW is in reset mode: Reapplying Init settings");
 					usleep_range(1000, 1010);
+				cam_flash_override_torch_brightness(i2c_list);
 					rc = cam_sensor_util_i2c_apply_setting
 					(&(fctrl->io_master_info), i2c_list);
 				}
@@ -874,6 +898,7 @@ config_setting:
 			list_for_each_entry(i2c_list,
 				&(fctrl->i2c_data.config_settings.list_head),
 				list) {
+				cam_flash_override_torch_brightness(i2c_list);
 				rc = cam_sensor_util_i2c_apply_setting
 					(&(fctrl->io_master_info), i2c_list);
 				if (rc) {
@@ -891,6 +916,7 @@ config_setting:
 			(i2c_set->request_id == req_id)) {
 			list_for_each_entry(i2c_list,
 				&(i2c_set->list_head), list) {
+				cam_flash_override_torch_brightness(i2c_list);
 				rc = cam_sensor_util_i2c_apply_setting(
 					&(fctrl->io_master_info), i2c_list);
 				if (rc) {

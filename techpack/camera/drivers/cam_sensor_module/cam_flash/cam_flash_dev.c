@@ -9,6 +9,65 @@
 #include "cam_flash_core.h"
 #include "cam_common_util.h"
 #include "camera_main.h"
+
+/* Torch brightness level: -1 = use HAL default, 0-127 = override */
+int cam_torch_brightness_level = -1;
+EXPORT_SYMBOL(cam_torch_brightness_level);
+
+static ssize_t torch_brightness_store(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct platform_device *pdev = to_platform_device(dev);
+	struct cam_flash_ctrl *fctrl = platform_get_drvdata(pdev);
+	int val;
+
+	if (kstrtoint(buf, 10, &val))
+		return -EINVAL;
+	if (val < -1) val = -1;
+	if (val > 127) val = 127;
+	cam_torch_brightness_level = val;
+
+	/* If torch is currently active, write directly to the hardware registers */
+	if (fctrl && fctrl->flash_state == CAM_FLASH_STATE_START && val >= 0) {
+		struct cam_sensor_i2c_reg_setting write_setting;
+		struct cam_sensor_i2c_reg_array reg_setting[2];
+		int rc;
+
+		reg_setting[0].reg_addr = 0x05;
+		reg_setting[0].reg_data = (uint16_t)(val & 0x7F);
+		reg_setting[0].delay = 0;
+		reg_setting[0].data_mask = 0;
+
+		reg_setting[1].reg_addr = 0x06;
+		reg_setting[1].reg_data = (uint16_t)(val & 0x7F);
+		reg_setting[1].delay = 0;
+		reg_setting[1].data_mask = 0;
+
+		write_setting.reg_setting = reg_setting;
+		write_setting.size = 2;
+		write_setting.addr_type = CAMERA_SENSOR_I2C_TYPE_BYTE;
+		write_setting.data_type = CAMERA_SENSOR_I2C_TYPE_BYTE;
+		write_setting.delay = 0;
+
+		mutex_lock(&(fctrl->flash_mutex));
+		if (fctrl->flash_state == CAM_FLASH_STATE_START) {
+			rc = camera_io_dev_write(&(fctrl->io_master_info), &write_setting);
+			if (rc)
+				CAM_ERR(CAM_FLASH, "Failed to apply live torch brightness: %d", rc);
+		}
+		mutex_unlock(&(fctrl->flash_mutex));
+	}
+
+	return count;
+}
+
+static ssize_t torch_brightness_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%d\n", cam_torch_brightness_level);
+}
+static DEVICE_ATTR_RW(torch_brightness);
+#include "camera_main.h"
 #ifdef CONFIG_CAMERA_FLASH_PWM
 #include "pm6125_flash_gpio.h"
 #endif
@@ -585,6 +644,7 @@ static int cam_flash_component_bind(struct device *dev,
 
 	fctrl->flash_state = CAM_FLASH_STATE_INIT;
 	CAM_DBG(CAM_FLASH, "Component bound successfully");
+	device_create_file(&pdev->dev, &dev_attr_torch_brightness);
 #ifdef CONFIG_CAMERA_FLASH_PWM
 	pm6125_flash_control_create_device(&pdev->dev);
 #endif
@@ -615,6 +675,7 @@ static void cam_flash_component_unbind(struct device *dev,
 #endif
 
 	fctrl = platform_get_drvdata(pdev);
+	device_remove_file(&pdev->dev, &dev_attr_torch_brightness);
 	if (!fctrl) {
 		CAM_ERR(CAM_FLASH, "Flash device is NULL");
 		return;
