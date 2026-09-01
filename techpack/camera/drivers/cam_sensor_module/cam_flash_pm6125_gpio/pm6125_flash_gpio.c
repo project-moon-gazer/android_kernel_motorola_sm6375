@@ -165,8 +165,6 @@ static ssize_t flashlight_brightness_show(struct device *dev,
 static ssize_t flashlight_brightness_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size)
 {
-	struct cam_flash_ctrl *fctrl = dev_get_drvdata(dev);
-	struct cam_flash_private_soc *soc_private = fctrl->soc_info.soc_private;
 	unsigned long brightness_to_set;
 	ssize_t ret = -EINVAL;
 
@@ -188,34 +186,6 @@ static ssize_t flashlight_brightness_store(struct device *dev,
 					   "Low",
 			 flashlight_brightness);
 
-		// disable first
-		cam_res_mgr_gpio_set_value(
-			soc_private->flash_gpio_enable, 0);
-		cam_res_mgr_gpio_free(fctrl->soc_info.dev,
-						soc_private->flash_gpio_enable);
-		pm6125_flash_gpio_select_state(PM6125_FLASH_GPIO_STATE_SUSPEND, CAMERA_SENSOR_FLASH_OP_OFF, 0);
-
-		// get handle
-		ret = cam_res_mgr_gpio_request(
-			fctrl->soc_info.dev,
-			soc_private->flash_gpio_enable, 0,
-			"CUSTOM_GPIO1");
-		if (ret) {
-			CAM_ERR(CAM_FLASH, "gpio %d request fails",
-				soc_private->flash_gpio_enable);
-			return ret;
-		}
-
-		cam_res_mgr_gpio_set_value(
-			soc_private->flash_gpio_enable,
-			flashlight_enable == CAMERA_SENSOR_FLASH_STATUS_HIGH);
-		if (flashlight_enable == CAMERA_SENSOR_FLASH_STATUS_LOW) {
-			pm6125_flash_gpio_select_state(
-				PM6125_FLASH_GPIO_STATE_ACTIVE,
-				CAMERA_SENSOR_FLASH_OP_FIRELOW,
-				FLASH_FIRE_LOW_MAXCURRENT);
-			usleep_range(5000, 6000);
-		}
 		pm6125_flash_gpio_select_state(
 			PM6125_FLASH_GPIO_STATE_ACTIVE,
 			flashlight_enable == CAMERA_SENSOR_FLASH_STATUS_HIGH ?
