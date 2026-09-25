@@ -1,3 +1,4 @@
+CONFIG_KSU_SUSFS=y
 CONFIG_USER_NS=y
 CONFIG_SECCOMP_FILTER=y
 # Enable DMA Buffer sysfs statistics (/sys/kernel/dmabuf/buffers) 
