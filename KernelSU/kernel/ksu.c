@@ -19,6 +19,9 @@
 #endif // MODULE
 
 #include "kernel_includes.h"
+#ifdef CONFIG_KSU_SUSFS
+#include <linux/susfs.h>
+#endif // #ifdef CONFIG_KSU_SUSFS
 
 // selinux includes
 #include "avc_ss.h"
@@ -287,6 +290,9 @@ static int __init kernelsu_init(void)
 	ksu_throne_tracker_init();
 	ksu_ksud_init();
 	ksu_file_wrapper_init();
+#ifdef CONFIG_KSU_SUSFS
+	susfs_init();
+#endif // #ifdef CONFIG_KSU_SUSFS
 	ksu_preinit_init();
 
 #ifdef CONFIG_KSU_TAMPER_SYSCALL_TABLE

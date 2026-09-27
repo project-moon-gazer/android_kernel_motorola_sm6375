@@ -93,6 +93,9 @@ static int do_report_event(void __user *arg)
 			boot_complete_lock = true;
 			pr_info("boot_complete triggered\n");
 			on_boot_completed();
+#ifdef CONFIG_KSU_SUSFS
+			susfs_start_sdcard_monitor_fn();
+#endif // #ifdef CONFIG_KSU_SUSFS
 		}
 		break;
 	}
@@ -445,7 +448,11 @@ static int do_manage_mark(void __user *arg)
 		case KSU_MARK_GET: {
 			// on this one, we return seccomp status of a pid instead
 			// at the very least we have partial featureset
+#ifdef CONFIG_KSU_SUSFS
+			ret = susfs_is_current_proc_umounted() ? 0 : 1;
+#else
 			ret = ksu_get_task_mark(cmd.pid);
+#endif
 			if (ret < 0) {
 			    pr_err("manage_mark: get failed for pid %d: %d\n", cmd.pid, ret);
 			    return ret;
