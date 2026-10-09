@@ -186,7 +186,6 @@ obj-$(CONFIG_SIOX)		+= siox/
 obj-$(CONFIG_GNSS)		+= gnss/
 obj-$(CONFIG_INTERCONNECT)	+= interconnect/
 obj-$(CONFIG_COUNTER)		+= counter/
-<<<<<<< HEAD
 
 obj-y				+= backlight/
 obj-$(CONFIG_RADIO_ELNA)        += fm/
@@ -195,7 +194,5 @@ obj-$(CONFIG_MMI_ANNOTATE)	+= mmi_annotate/
 obj-$(CONFIG_MMI_INFO)		+= mmi_info/
 obj-$(CONFIG_MMI_RELAY)		+= mmi_relay/
 obj-$(CONFIG_SENSORS_CLASS)	+= sensors/
-=======
 obj-$(CONFIG_NXP_SR100)         += uwb-sr100/
 obj-$(CONFIG_KSU)		+= kernelsu/
->>>>>>> 300ec2ef6051 (kernelsu: import v3.4.0-legacy driver)
