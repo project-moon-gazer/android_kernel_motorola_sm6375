@@ -100,6 +100,7 @@ typedef struct _fsm_rotation_info_t
 static struct q6fsm_afe *g_fsm_afe;
 static uint32_t *q6fsm_get_buffer;
 static bool fsm_scene_status = false;
+static bool q6fsm_rx_dead = false;
 
 static int q6afe_set_params(u16 port_id, int index,
 			    struct mem_mapping_hdr *mem_hdr,
@@ -151,6 +152,9 @@ static int q6fsm_afe_set_params(struct param_hdr_v3 *param_hdr,
 	int port_id, index;
 	int retry = 0;
 	int ret;
+
+	if (!fsm_scene_status || q6fsm_rx_dead)
+		return -ENODEV;
 
 	if (param_hdr == NULL || params == NULL) {
 		fsm_err("Bad parameters");
@@ -216,6 +220,9 @@ static int q6fsm_afe_get_params(struct param_hdr_v3 *param_hdr,
 	int retry = 0;
 	int ret;
 
+	if (!fsm_scene_status || q6fsm_rx_dead)
+		return -ENODEV;
+
 	if (param_hdr == NULL || params == NULL) {
 		fsm_err("Bad parameters");
 		return -EINVAL;
@@ -259,16 +266,20 @@ static int q6fsm_afe_get_params(struct param_hdr_v3 *param_hdr,
 bool q6fsm_get_rx_status(void)
 {
 	struct param_hdr_v3 param_hdr;
-	uint32_t enable;
+	uint32_t enable = 0;
 	int ret;
 
-	if(fsm_scene_status == false){
-		return -EINVAL;
+	if (fsm_scene_status == false) {
+		return false;
+	}
+
+	if (q6fsm_rx_dead) {
+		return false;
 	}
 
 	if (!q6fsm_check_dsp_ready()) {
 		fsm_info("DSP not ready yet!");
-		return -EINVAL;
+		return false;
 	}
 
 	param_hdr.module_id = AFE_MODULE_ID_FSADSP_RX;
@@ -281,6 +292,8 @@ bool q6fsm_get_rx_status(void)
 		(uint8_t *)&enable, sizeof(enable));
 	if (ret) {
 		fsm_err("Get params failed: %d", ret);
+		if (ret == -ETIMEDOUT)
+			q6fsm_rx_dead = true;
 		return false;
 	}
 
@@ -364,7 +377,10 @@ EXPORT_SYMBOL(q6fsm_set_rotation);
 
 void q6fsm_fsm_check_scene_status(bool status)
 {
-    fsm_scene_status = status;
+	fsm_scene_status = status;
+	if (!status && g_fsm_afe && g_fsm_afe->monitor_en) {
+		cancel_delayed_work(&g_fsm_afe->vbat_work);
+	}
 }
 EXPORT_SYMBOL(q6fsm_fsm_check_scene_status);
 
@@ -602,13 +618,17 @@ static void q6fsm_monitor_switch(bool enable)
 	if (enable) {
 		if (q6fsm->monitor_en)
 			return;
-		if(fsm_scene_status == false){
+		q6fsm_rx_dead = false;
+		if (fsm_scene_status == false) {
 			fsm_info("no need to start vbat monitor");
 			return;
 		}
 		q6fsm->monitor_en = true;
-		queue_delayed_work(q6fsm->vbat_wq, &q6fsm->vbat_work, 0);
+		/* give the DSP time to bring the port up before the first query */
+		queue_delayed_work(q6fsm->vbat_wq, &q6fsm->vbat_work,
+				   msecs_to_jiffies(500));
 	} else {
+		q6fsm_rx_dead = false;
 		if (!q6fsm->monitor_en)
 			return;
 		q6fsm->monitor_en = false;
