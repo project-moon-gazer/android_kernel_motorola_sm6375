@@ -101,6 +101,16 @@ static struct q6fsm_afe *g_fsm_afe;
 static uint32_t *q6fsm_get_buffer;
 static bool fsm_scene_status = false;
 
+/*
+ * q6fsm queries go through the global AFE command lock. If the FSADSP module
+ * is not part of the running topology the DSP never answers, so use a short
+ * wait for q6fsm's own commands (only the task that owns cmd_lock sets this)
+ * and remember the failure until the monitor is re-enabled.
+ */
+#define Q6FSM_AFE_TIMEOUT_MS (500)
+static struct task_struct *q6fsm_short_timeout_task;
+static bool q6fsm_rx_dead;
+
 static int q6afe_set_params(u16 port_id, int index,
 			    struct mem_mapping_hdr *mem_hdr,
 			    u8 *packed_param_data, u32 packed_data_size);
@@ -191,8 +201,10 @@ static int q6fsm_afe_set_params(struct param_hdr_v3 *param_hdr,
 		}
 		while (retry++ < Q6FSM_RETRY_TIME) {
 			if (q6fsm_check_dsp_ready()) {
+				q6fsm_short_timeout_task = current;
 				ret = q6afe_set_params(port_id, index, NULL,
 					packed_param_data, packed_data_size);
+				q6fsm_short_timeout_task = NULL;
 				break;
 			}
 			msleep(Q6FSM_SLEEP_TIME);
@@ -237,7 +249,9 @@ static int q6fsm_afe_get_params(struct param_hdr_v3 *param_hdr,
 	do {
 		while (retry++ < Q6FSM_RETRY_TIME) {
 			if (q6fsm_check_dsp_ready()) {
+				q6fsm_short_timeout_task = current;
 				ret = q6afe_get_params(port_id, NULL, param_hdr);
+				q6fsm_short_timeout_task = NULL;
 				break;
 			}
 			msleep(Q6FSM_SLEEP_TIME);
@@ -263,12 +277,15 @@ bool q6fsm_get_rx_status(void)
 	int ret;
 
 	if(fsm_scene_status == false){
-		return -EINVAL;
+		return false;
 	}
+
+	if (q6fsm_rx_dead)
+		return false;
 
 	if (!q6fsm_check_dsp_ready()) {
 		fsm_info("DSP not ready yet!");
-		return -EINVAL;
+		return false;
 	}
 
 	param_hdr.module_id = AFE_MODULE_ID_FSADSP_RX;
@@ -281,6 +298,8 @@ bool q6fsm_get_rx_status(void)
 		(uint8_t *)&enable, sizeof(enable));
 	if (ret) {
 		fsm_err("Get params failed: %d", ret);
+		if (ret == -ETIMEDOUT)
+			q6fsm_rx_dead = true;
 		return false;
 	}
 
@@ -602,13 +621,17 @@ static void q6fsm_monitor_switch(bool enable)
 	if (enable) {
 		if (q6fsm->monitor_en)
 			return;
+		q6fsm_rx_dead = false;
 		if(fsm_scene_status == false){
 			fsm_info("no need to start vbat monitor");
 			return;
 		}
 		q6fsm->monitor_en = true;
-		queue_delayed_work(q6fsm->vbat_wq, &q6fsm->vbat_work, 0);
+		/* give the DSP time to bring the port up before the first query */
+		queue_delayed_work(q6fsm->vbat_wq, &q6fsm->vbat_work,
+				msecs_to_jiffies(500));
 	} else {
+		q6fsm_rx_dead = false;
 		if (!q6fsm->monitor_en)
 			return;
 		q6fsm->monitor_en = false;

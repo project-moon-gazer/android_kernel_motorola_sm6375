@@ -1658,6 +1658,14 @@ int afe_q6_interface_prepare(void)
 }
 EXPORT_SYMBOL(afe_q6_interface_prepare);
 
+#ifdef CONFIG_SND_SOC_FS1815
+/* q6fsm's own queries must not hold afe_apr_lock for the full 2 s */
+#define AFE_APR_WAIT_MS() ((q6fsm_short_timeout_task == current) ? \
+			   Q6FSM_AFE_TIMEOUT_MS : (2 * TIMEOUT_MS))
+#else
+#define AFE_APR_WAIT_MS() (2 * TIMEOUT_MS)
+#endif
+
 /*
  * afe_apr_send_pkt : returns 0 on success, negative otherwise.
  */
@@ -1674,7 +1682,7 @@ static int afe_apr_send_pkt(void *data, wait_queue_head_t *wait)
 		if (wait) {
 			ret = wait_event_timeout(*wait,
 					(atomic_read(&this_afe.state) == 0),
-					msecs_to_jiffies(2 * TIMEOUT_MS));
+					msecs_to_jiffies(AFE_APR_WAIT_MS()));
 			if (!ret) {
 				pr_err_ratelimited("%s: request timedout\n",
 					__func__);
