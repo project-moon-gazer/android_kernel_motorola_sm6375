@@ -10,6 +10,7 @@
 #include <linux/slab.h>
 #include <linux/irqdomain.h>
 #include <linux/regmap.h>
+#include <linux/irqdesc.h>
 #include <asoc/wcd-irq.h>
 
 static int wcd_map_irq(struct wcd_irq_info *irq_info, int irq)
@@ -76,10 +77,20 @@ EXPORT_SYMBOL(wcd_free_irq);
  */
 void wcd_enable_irq(struct wcd_irq_info *irq_info, int irq)
 {
-	if (!irq_info)
+	int virq;
+	struct irq_desc *desc;
+
+	if (!irq_info) {
 		pr_err("%s: Null IRQ handle\n", __func__);
-	else
-		enable_irq(wcd_map_irq(irq_info, irq));
+		return;
+	}
+	virq = wcd_map_irq(irq_info, irq);
+	if (virq <= 0)
+		return;
+
+	desc = irq_to_desc(virq);
+	if (desc && desc->depth > 0)
+		enable_irq(virq);
 }
 EXPORT_SYMBOL(wcd_enable_irq);
 
@@ -90,10 +101,20 @@ EXPORT_SYMBOL(wcd_enable_irq);
  */
 void wcd_disable_irq(struct wcd_irq_info *irq_info, int irq)
 {
-	if (!irq_info)
+	int virq;
+	struct irq_desc *desc;
+
+	if (!irq_info) {
 		pr_err("%s: Null IRQ handle\n", __func__);
-	else
-		disable_irq_nosync(wcd_map_irq(irq_info, irq));
+		return;
+	}
+	virq = wcd_map_irq(irq_info, irq);
+	if (virq <= 0)
+		return;
+
+	desc = irq_to_desc(virq);
+	if (desc && desc->depth == 0)
+		disable_irq_nosync(virq);
 }
 EXPORT_SYMBOL(wcd_disable_irq);
 
