@@ -33,6 +33,7 @@
 // FSADSP MODULE ID
 #define AFE_MODULE_ID_FSADSP_TX (0x10001110)
 #define AFE_MODULE_ID_FSADSP_RX (0x10001111)
+#define FSADSP_SPEAKER_TOPOLOGY_ID (0x11111111)
 // FSADSP PARAM ID
 #define CAPI_V2_PARAM_FSADSP_TX_ENABLE     0x11111601
 #define CAPI_V2_PARAM_FSADSP_RX_ENABLE     0x11111611
@@ -113,20 +114,25 @@ static int q6fsm_afe_callback(void *payload, int size)
 {
 	uint32_t *payload32 = payload;
 
-	if (payload32[0] != 0) {
-		pr_err("invalid status: %d", payload32[0]);
+	if (!payload || size < 8)
 		return -EINVAL;
-	}
 
-	fsm_dbg("payload size: %d", size);
 	switch (payload32[1]) {
 	case AFE_MODULE_ID_FSADSP_TX:
 	case AFE_MODULE_ID_FSADSP_RX:
-		memcpy(q6fsm_get_buffer, payload32 + 1, size - 4);
 		break;
 	default:
 		return -EINVAL;
 	}
+
+	if (payload32[0] != 0) {
+		pr_err("%s: invalid status: %d\n", __func__, payload32[0]);
+		return 0;
+	}
+
+	fsm_dbg("payload size: %d", size);
+	if (q6fsm_get_buffer && size > 4)
+		memcpy(q6fsm_get_buffer, payload32 + 1, size - 4);
 
 	return 0;
 }
@@ -138,10 +144,10 @@ static bool q6fsm_check_dsp_ready(void)
 	topo_id = afe_get_topology(Q6FSM_AFE_RX_PORT);
 	fsm_dbg("topo_id: 0x%x", topo_id);
 
-	if (topo_id <= 0)
+	if (topo_id != FSADSP_SPEAKER_TOPOLOGY_ID)
 		return false;
-	else
-		return true;
+
+	return true;
 }
 
 static int q6fsm_afe_set_params(struct param_hdr_v3 *param_hdr,
@@ -151,9 +157,12 @@ static int q6fsm_afe_set_params(struct param_hdr_v3 *param_hdr,
 	int packed_data_size;
 	int port_id, index;
 	int retry = 0;
-	int ret;
+	int ret = -ENODEV;
 
 	if (!fsm_scene_status || q6fsm_rx_dead)
+		return -ENODEV;
+
+	if (!q6fsm_check_dsp_ready())
 		return -ENODEV;
 
 	if (param_hdr == NULL || params == NULL) {
@@ -199,8 +208,8 @@ static int q6fsm_afe_set_params(struct param_hdr_v3 *param_hdr,
 					packed_param_data, packed_data_size);
 				break;
 			}
-			msleep(Q6FSM_SLEEP_TIME);
-			ret = -ETIMEDOUT;
+			ret = -ENODEV;
+			break;
 		}
 	} while (0);
 	if (ret)
@@ -218,9 +227,12 @@ static int q6fsm_afe_get_params(struct param_hdr_v3 *param_hdr,
 {
 	int port_id;
 	int retry = 0;
-	int ret;
+	int ret = -ENODEV;
 
 	if (!fsm_scene_status || q6fsm_rx_dead)
+		return -ENODEV;
+
+	if (!q6fsm_check_dsp_ready())
 		return -ENODEV;
 
 	if (param_hdr == NULL || params == NULL) {
@@ -247,8 +259,8 @@ static int q6fsm_afe_get_params(struct param_hdr_v3 *param_hdr,
 				ret = q6afe_get_params(port_id, NULL, param_hdr);
 				break;
 			}
-			msleep(Q6FSM_SLEEP_TIME);
-			ret = -ETIMEDOUT;
+			ret = -ENODEV;
+			break;
 		}
 		if (!ret)
 			memcpy(params, &q6fsm_get_buffer[4], length);
@@ -620,7 +632,12 @@ static void q6fsm_monitor_switch(bool enable)
 			return;
 		q6fsm_rx_dead = false;
 		if (fsm_scene_status == false) {
-			fsm_info("no need to start vbat monitor");
+			fsm_info("no need to start vbat monitor: scene off");
+			return;
+		}
+		if (!q6fsm_check_dsp_ready()) {
+			fsm_info("no need to start vbat monitor: DSP topology 0x%x not matching speaker 0x%x",
+				 afe_get_topology(Q6FSM_AFE_RX_PORT), FSADSP_SPEAKER_TOPOLOGY_ID);
 			return;
 		}
 		q6fsm->monitor_en = true;
