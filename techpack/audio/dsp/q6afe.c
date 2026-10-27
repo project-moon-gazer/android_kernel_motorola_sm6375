@@ -1204,7 +1204,13 @@ static int32_t afe_callback(struct apr_client_data *data, void *priv)
 
 #ifdef CONFIG_SND_SOC_FS1815
 		if (!q6fsm_afe_callback(data->payload, data->payload_size)) {
-			atomic_set(&this_afe.state, 0);
+			if (payload[0] == 0) {
+				atomic_set(&this_afe.state, 0);
+			} else {
+				pr_debug("%s: fsadsp error status: %d\n", __func__, payload[0]);
+				atomic_set(&this_afe.status, payload[0]);
+				atomic_set(&this_afe.state, 0);
+			}
 			if (afe_token_is_valid(data->token)) {
 				wake_up(&this_afe.wait[data->token]);
 				return 0;
@@ -4700,13 +4706,10 @@ static int afe_send_cmd_port_start(u16 port_id)
 		       port_id, ret);
 
 #ifdef CONFIG_SND_SOC_FS1815
-	//TODO:
-	// Set the monitor enable when:
-	// 1) Speaker PA type is matched
-	// 2) In speaker playback
-	// 3) The RX Port is the same as the one of speaker playback
-	if (port_id == Q6FSM_AFE_RX_PORT)
-		q6fsm_monitor_switch(true);
+	if (port_id == Q6FSM_AFE_RX_PORT) {
+		if (afe_get_topology(port_id) == FSADSP_SPEAKER_TOPOLOGY_ID)
+			q6fsm_monitor_switch(true);
+	}
 #endif
 
 	return ret;

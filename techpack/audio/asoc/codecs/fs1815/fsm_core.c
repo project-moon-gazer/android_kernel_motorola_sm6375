@@ -19,6 +19,7 @@ static atomic_t fsm_adsp_enable;
 extern int q6fsm_set_rotation(int angle);
 extern int q6fsm_set_rx_enable(int enable);
 extern void q6fsm_fsm_check_scene_status(bool status);
+static int fsm_check_scene_status(void);
 static LIST_HEAD(fsm_dev_list);
 #define fsm_list_init(fsm_dev) \
 	do { \
@@ -1349,6 +1350,11 @@ void fsm_set_scene(int scene)
 	fsm_mutex_lock();
 	cfg->next_scene = BIT(scene);
 	fsm_list_func(fsm_dev, fsm_stub_switch_preset);
+	if (fsm_check_scene_status() == 0) {
+		q6fsm_fsm_check_scene_status(true);
+	} else {
+		q6fsm_fsm_check_scene_status(false);
+	}
 	fsm_mutex_unlock();
 }
 
