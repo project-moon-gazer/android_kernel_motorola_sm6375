@@ -909,9 +909,8 @@ static int wcd937x_codec_enable_hphl_pa(struct snd_soc_dapm_widget *w,
 			wcd937x->update_wcd_event(wcd937x->handle,
 						SLV_BOLERO_EVT_RX_MUTE,
 						(WCD_RX1 << 0x10));
-		if (!test_bit(WCD_EAR_EN, &wcd937x->status_mask))
-			wcd_enable_irq(&wcd937x->irq_info,
-					WCD937X_IRQ_HPHL_PDM_WD_INT);
+		wcd_enable_irq(&wcd937x->irq_info,
+				WCD937X_IRQ_HPHL_PDM_WD_INT);
 		break;
 	case SND_SOC_DAPM_PRE_PMD:
 		if (!test_bit(WCD_EAR_EN, &wcd937x->status_mask)) {
@@ -1064,7 +1063,7 @@ static int wcd937x_codec_enable_ear_pa(struct snd_soc_dapm_widget *w,
 		if (wcd937x->ear_rx_path & EAR_RX_PATH_AUX)
 			wcd_enable_irq(&wcd937x->irq_info,
 					WCD937X_IRQ_AUX_PDM_WD_INT);
-		else if (!test_bit(WCD_HPHL_EN, &wcd937x->status_mask))
+		else
 			wcd_enable_irq(&wcd937x->irq_info,
 					WCD937X_IRQ_HPHL_PDM_WD_INT);
 		break;
