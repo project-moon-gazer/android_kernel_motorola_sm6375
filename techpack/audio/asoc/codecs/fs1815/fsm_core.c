@@ -15,10 +15,14 @@ static int g_dev_inited = 0;
 static atomic_t fsm_amp_switch;
 static atomic_t fsm_adsp_enable;
 
+static void fsm_speaker_off_work_func(struct work_struct *work);
+static DECLARE_DELAYED_WORK(fsm_speaker_off_dwork, fsm_speaker_off_work_func);
+
 //include "q6fsm-v3.h"
 extern int q6fsm_set_rotation(int angle);
 extern int q6fsm_set_rx_enable(int enable);
 extern void q6fsm_fsm_check_scene_status(bool status);
+static int fsm_check_scene_status(void);
 static LIST_HEAD(fsm_dev_list);
 #define fsm_list_init(fsm_dev) \
 	do { \
@@ -1349,6 +1353,11 @@ void fsm_set_scene(int scene)
 	fsm_mutex_lock();
 	cfg->next_scene = BIT(scene);
 	fsm_list_func(fsm_dev, fsm_stub_switch_preset);
+	if (fsm_check_scene_status() == 0) {
+		q6fsm_fsm_check_scene_status(true);
+	} else {
+		q6fsm_fsm_check_scene_status(false);
+	}
 	fsm_mutex_unlock();
 }
 
@@ -1464,6 +1473,7 @@ void fsm_remove(fsm_dev_t *fsm_dev)
 	if (!fsm_dev) {
 		return;
 	}
+	cancel_delayed_work_sync(&fsm_speaker_off_dwork);
 	fsm_mutex_lock();
 	list_del(&fsm_dev->list);
 	if (fsm_dev->tdata) {
@@ -1582,17 +1592,35 @@ int fsm_amp_switch_get(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
+static void fsm_speaker_off_work_func(struct work_struct *work)
+{
+	if (atomic_read(&fsm_amp_switch) == 0) {
+		pr_info("delayed shutdown executing");
+		fsm_speaker_off();
+	} else {
+		pr_info("delayed shutdown ignored, switch is on");
+	}
+}
+
 int fsm_amp_switch_put(struct snd_kcontrol *kcontrol,
 			struct snd_ctl_elem_value *ucontrol)
 {
 	int enable = ucontrol->value.integer.value[0];
+	fsm_config_t *cfg = fsm_get_config();
 
 	pr_info("switch: %s", enable ? "On" : "Off");
 	atomic_set(&fsm_amp_switch, enable);
 	if (enable) {
+		cancel_delayed_work(&fsm_speaker_off_dwork);
 		fsm_speaker_onn();
 	} else {
-		fsm_speaker_off();
+		/* Debounce shutdown by 500ms to avoid thrashing during audio routing transitions */
+		if (cfg && cfg->speaker_on) {
+			pr_info("scheduling delayed speaker off (500ms)");
+			schedule_delayed_work(&fsm_speaker_off_dwork, msecs_to_jiffies(500));
+		} else {
+			fsm_speaker_off();
+		}
 	}
 
 	return 0;
@@ -1721,8 +1749,14 @@ void fsm_speaker_onn(void)
 	fsm_dev_t *fsm_dev = NULL;
 	int ret;
 
+	cancel_delayed_work(&fsm_speaker_off_dwork);
 	pr_info("scene: %04X", cfg->next_scene);
 	fsm_mutex_lock();
+	if (cfg->speaker_on && !cfg->stream_muted) {
+		pr_info("speaker already on, skip reinit");
+		fsm_mutex_unlock();
+		return;
+	}
 	cfg->stream_muted = false;
 	ret = fsm_try_init();
 	if (ret) { // no device or firmware
@@ -1752,8 +1786,14 @@ void fsm_speaker_off(void)
 	fsm_dev_t *fsm_dev = NULL;
 	int ret;
 
+	cancel_delayed_work(&fsm_speaker_off_dwork);
 	pr_info("scene: %04X", cfg->next_scene);
 	fsm_mutex_lock();
+	if (!cfg->speaker_on) {
+		pr_debug("speaker already off, skip");
+		fsm_mutex_unlock();
+		return;
+	}
 	cfg->stream_muted = true;
 	ret = fsm_try_init();
 	if (ret) {
