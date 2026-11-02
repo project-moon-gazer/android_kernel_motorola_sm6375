@@ -1352,6 +1352,15 @@ void fsm_set_scene(int scene)
 	}
 	fsm_mutex_lock();
 	cfg->next_scene = BIT(scene);
+        {
+	fsm_dev_t *d;
+	list_for_each_entry(d, &fsm_dev_list, list) {
+		/* chip doesn't own the new scene: forget its scene so it
+		 * is fully reprogrammed and started when it owns one again */
+		if ((d->own_scene & cfg->next_scene) == 0)
+			d->cur_scene = FSM_SCENE_UNKNOW;
+	}
+}
 	fsm_list_func(fsm_dev, fsm_stub_switch_preset);
 	if (fsm_check_scene_status() == 0) {
 		q6fsm_fsm_check_scene_status(true);
