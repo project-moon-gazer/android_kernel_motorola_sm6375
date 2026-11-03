@@ -133,7 +133,7 @@ int fs1815_start_up(fsm_dev_t *fsm_dev)
 	// 0x100000; power up
 	ret |= fsm_reg_write(fsm_dev, REG(FS1815_PWRCTRL), 0x0000);
 	ret |= fsm_config_vol(fsm_dev);
-	fsm_delay_ms(10);
+	fsm_delay_ms(2);
 	fsm_dev->errcode = ret;
 
 	return ret;
@@ -148,7 +148,7 @@ int fs1815_shut_down(fsm_dev_t *fsm_dev)
 	}
 	ret = fsm_reg_write(fsm_dev, REG(FS1815_PWRCTRL), 0x0001);
 	ret |= fsm_reg_write(fsm_dev, REG(FS1815_SYSCTRL), 0x0000);
-	fsm_delay_ms(10);
+	fsm_dev->errcode = ret;
 
 	return ret;
 }

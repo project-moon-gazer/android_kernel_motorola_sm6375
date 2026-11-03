@@ -690,7 +690,7 @@ static int wcd937x_codec_ear_dac_event(struct snd_soc_dapm_widget *w,
 			snd_soc_component_update_bits(component,
 				WCD937X_DIGITAL_CDC_COMP_CTL_0,
 				0x02, 0x02);
-		usleep_range(5000, 5010);
+		usleep_range(5000, 5500);
 		snd_soc_component_update_bits(component, WCD937X_FLYBACK_EN,
 				0x04, 0x00);
 		wcd_cls_h_fsm(component, &wcd937x->clsh_info,
@@ -792,9 +792,9 @@ static int wcd937x_codec_enable_hphr_pa(struct snd_soc_dapm_widget *w,
 		 */
 		if (test_bit(HPH_PA_DELAY, &wcd937x->status_mask)) {
 			if (!wcd937x->comp2_enable)
-				usleep_range(20000, 20100);
+				usleep_range(20000, 20500);
 			else
-				usleep_range(7000, 7100);
+				usleep_range(7000, 7500);
 			clear_bit(HPH_PA_DELAY, &wcd937x->status_mask);
 		}
 
@@ -832,9 +832,9 @@ static int wcd937x_codec_enable_hphr_pa(struct snd_soc_dapm_widget *w,
 		 */
 		if (test_bit(HPH_PA_DELAY, &wcd937x->status_mask)) {
 			if (!wcd937x->comp2_enable)
-				usleep_range(20000, 20100);
+				usleep_range(20000, 20500);
 			else
-				usleep_range(7000, 7100);
+				usleep_range(7000, 7500);
 			clear_bit(HPH_PA_DELAY, &wcd937x->status_mask);
 		}
 
@@ -892,9 +892,9 @@ static int wcd937x_codec_enable_hphl_pa(struct snd_soc_dapm_widget *w,
 		 */
 		if (test_bit(HPH_PA_DELAY, &wcd937x->status_mask)) {
 			if (!wcd937x->comp1_enable)
-				usleep_range(20000, 20100);
+				usleep_range(20000, 20500);
 			else
-				usleep_range(7000, 7100);
+				usleep_range(7000, 7500);
 			clear_bit(HPH_PA_DELAY, &wcd937x->status_mask);
 		}
 
@@ -935,9 +935,9 @@ static int wcd937x_codec_enable_hphl_pa(struct snd_soc_dapm_widget *w,
 		 */
 		if (test_bit(HPH_PA_DELAY, &wcd937x->status_mask)) {
 			if (!wcd937x->comp1_enable)
-				usleep_range(20000, 20100);
+				usleep_range(20000, 20500);
 			else
-				usleep_range(7000, 7100);
+				usleep_range(7000, 7500);
 			clear_bit(HPH_PA_DELAY, &wcd937x->status_mask);
 		}
 

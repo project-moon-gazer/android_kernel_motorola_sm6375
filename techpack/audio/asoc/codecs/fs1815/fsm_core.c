@@ -228,7 +228,7 @@ void fsm_delay_ms(uint32_t delay_ms)
 		return;
 	}
 #if defined(__KERNEL__)
-	usleep_range(delay_ms * 1000, delay_ms * 1000 + 1);
+	usleep_range(delay_ms * 1000, delay_ms * 1000 + 1000);
 #elif defined(FSM_HAL_SUPPORT)
 	usleep(delay_ms * 1000);
 #endif
