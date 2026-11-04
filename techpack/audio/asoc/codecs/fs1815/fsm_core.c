@@ -1623,10 +1623,10 @@ int fsm_amp_switch_put(struct snd_kcontrol *kcontrol,
 		cancel_delayed_work(&fsm_speaker_off_dwork);
 		fsm_speaker_onn();
 	} else {
-		/* Debounce shutdown by 500ms to avoid thrashing during audio routing transitions */
+		/* Debounce shutdown by 1200ms to avoid thrashing during audio routing transitions */
 		if (cfg && cfg->speaker_on) {
-			pr_info("scheduling delayed speaker off (500ms)");
-			schedule_delayed_work(&fsm_speaker_off_dwork, msecs_to_jiffies(500));
+			pr_info("scheduling delayed speaker off (1200ms)");
+			schedule_delayed_work(&fsm_speaker_off_dwork, msecs_to_jiffies(1200));
 		} else {
 			fsm_speaker_off();
 		}
